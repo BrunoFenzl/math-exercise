@@ -244,7 +244,7 @@
       }
 
       // Utilities taken from my previous project https://github.com/BrunoFenzl/svg-round-corners
-      function randomRange(min = 100, max = 500) {
+      function randomRange(min = 100, max = window.innerHeight) {
         min = Math.ceil(min);
         max = Math.floor(max);
         return Math.floor(Math.random() * (max - min + 1)) + min;
