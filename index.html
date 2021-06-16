@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <style>
+      body {
+        padding: 0;
+        margin: 0;
+        font-family: Helvetica, Arial, sans-serif;
+        color: white;
+      }
+
+      .canvas {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        background: #666;
+      }
+
+      .line {
+        position: absolute;
+        width: 0;
+        height: 1px;
+        background-color: #071a39;
+        transform-origin: left center;
+      }
+
+      .circle {
+        display: flex;
+        flex-flow: column wrap;
+        justify-content: center;
+        align-items: center;
+        position: absolute;
+        width: 150px;
+        height: 150px;
+        background-color: #ff705a;
+        border-radius: 50%;
+        cursor: hand;
+      }
+
+      .circle__input label {
+        display: inline-block;
+        width: 1em; /* ~1 char */
+      }
+
+      .circle__input input {
+        width: 4rem; /* ~4 chars */
+        margin-top: .5rem;
+        border: none;
+        border-bottom: 1px solid white;
+        color: white;
+        background: none;
+        font-size: 1rem;
+      }
+
+      .distance {
+        display: block;
+        position: absolute;
+        width: 4rem; /* ~3 chars */
+        margin: 0;
+        background-color: #071a39;
+        color: white;
+        padding: .3rem .2rem;
+        transform-origin: 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="line"></div>
+      <input type="number" id="distance" class="distance" value="150">
+      <div id="circle1" class="circle">
+        c1
+        <div class="circle__input">
+          <label for="x1">X:</label>
+          <input id="x1" data-axis="x" type="number" value="">
+        </div>
+        <div class="circle__input">
+          <label for="y1">Y:</label>
+          <input id="y1" data-axis="y" type="number" value="">
+        </div>
+      </div>
+      
+      <div id="circle2" class="circle">
+        c2
+        <div class="circle__input">
+          <label for="x2">X:</label>
+          <input id="x2" data-axis="x" type="number" value="" >
+        </div>
+        <div class="circle__input">
+          <label for="y2">Y:</label>
+          <input id="y2" data-axis="y" type="number" value="">
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const radius = 75;
+      const stage = document.querySelector('.stage');
+      const line = document.querySelector('.line');
+      const dist = document.querySelector('.distance');
+      let mouseDownOffset = { x: 0, y: 0 };
+      let currentCircle;
+
+      dist.addEventListener('change', distanceInputChange);
+
+      const circles = Array.from(document.querySelectorAll('.circle'))
+        // Create the circles object from a NodeList and bind eventListeners
+        .reduce(
+          (out, el) => {
+            const pos = { x: randomRange(), y: randomRange() }; // set initial values
+            el.addEventListener('mousedown', circleMouseDown);
+            el.addEventListener('change', circlesInputChange);
+            updateCirclePosition(el, pos);
+            updateInputFields(el, pos);
+            out[el.id] = pos;
+            return out;
+          },
+          {}
+        );
+
+      // Initial line position
+      updateLine();
+      updateDistanceInputValue();
+
+      /**
+       * 
+       * Event Listeners
+       * 
+       **/
+      function circleMouseDown(evt) {
+        currentCircle = evt.currentTarget;
+        const rect = evt.currentTarget.getBoundingClientRect();
+        mouseDownOffset = {
+          x: evt.clientX - rect.left,
+          y: evt.clientY - rect.top,
+        };
+
+        document.addEventListener('mousemove', documentMouseMove);
+        document.addEventListener('mouseup', documentMouseUp);
+      }
+
+      function documentMouseMove(evt) {
+        const pos = {
+          x: evt.clientX - mouseDownOffset.x,
+          y: evt.clientY - mouseDownOffset.y,
+        };
+        circles[currentCircle.id] = pos;
+
+        updateLine();
+        updateDistanceInputValue();
+        updateInputFields(currentCircle, pos);
+        updateCirclePosition(currentCircle, pos);
+      }
+
+      function documentMouseUp() {
+        document.removeEventListener('mousemove', documentMouseMove);
+        document.removeEventListener('mouseup', documentMouseUp);
+      }
+
+      function circlesInputChange(evt) {
+        const axis = evt.target.getAttribute('data-axis');
+        circles[currentCircle.id][axis] = evt.target.value;
+        updateCirclePosition(currentCircle, circles[currentCircle.id]);
+        updateDistanceInputValue();
+      }
+
+      function distanceInputChange(evt) {
+        const { entries, angle } = getAngleAndDistance();
+        const distance = evt.target.value;
+
+        const pos = {
+          x: entries[0].x + getAdjacentLength(angle, distance),
+          y: entries[0].y + getOppositeLength(angle, distance),
+        };
+
+        // When changing the distance, always update the second circle
+        currentCircle = document.getElementById('circle2');
+        circles['circle2'] = pos;
+        updateCirclePosition(currentCircle, circles[currentCircle.id]);
+        updateLine();
+        updateDistanceInputValue();
+        updateInputFields(currentCircle, pos);
+      }
+
+      /**
+       * 
+       * Drawing procedures
+       * 
+       **/
+       function updateLine() {
+        const { entries, distance, angle } = getAngleAndDistance();
+
+        Object.assign(line.style, {
+          width: `${distance}px`,
+          transform: `translate3d(${entries[0].x + radius}px, ${
+            entries[0].y + radius
+          }px, 0) rotate(${(angle * 180) / Math.PI}deg)`,
+        });
+      }
+
+      function updateInputFields(el, pos) {
+        // Memoize child input fields for faster access
+        if (!updateInputFields[el.id]) {
+          updateInputFields[el.id] = {
+            x: el.querySelector('[data-axis=x]'),
+            y: el.querySelector('[data-axis=y]'),
+          };
+        }
+        updateInputFields[el.id].x.value = pos.x;
+        updateInputFields[el.id].y.value = pos.y;
+      }
+
+      function updateDistanceInputValue() {
+        const { entries, distance, angle } = getAngleAndDistance();
+        const distX = getAdjacentLength(-angle, distance / 2);
+        const distY = getOppositeLength(angle, distance / 2);
+
+        dist.value = distance;
+        dist.style.transform = `translate3d(${
+          entries[0].x + radius + distX
+        }px, ${entries[0].y + radius + distY}px, 0) rotate(${
+          (angle * 180) / Math.PI
+        }deg) translate(-50%, -50%)`;
+      }
+
+      function updateCirclePosition(el, pos) {
+        el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+      }
+
+      function getAngleAndDistance() {
+        const entries = Object.keys(circles).map((k) => circles[k]);
+        const distance = getDistance(entries[0], entries[1]);
+        const angle = getAngle(entries[0], entries[1]);
+
+        return {
+          entries,
+          distance,
+          angle,
+        }
+      }
+
+      // Utilities taken from my previous project https://github.com/BrunoFenzl/svg-round-corners
+      function randomRange(min = 100, max = 500) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      function getAngle(p1, p2) {
+        return Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      }
+
+      function getDistance(p1, p2) {
+        const xDiff = p1.x - p2.x;
+        const yDiff = p1.y - p2.y;
+        return Math.sqrt(Math.pow(xDiff, 2) + Math.pow(yDiff, 2));
+      }
+
+      function getOppositeLength(angle, hip) {
+        return Math.sin(angle) * hip;
+      }
+
+      function getAdjacentLength(angle, hip) {
+        return Math.cos(angle) * hip;
+      }
+    </script>
+  </body>
+</html>
